@@ -19,6 +19,7 @@ const (
 )
 
 var (
+	backgroundColor = color.NRGBA{0x10, 0x10, 0x10, 0xff}
 	ecgOffsetX     = 0
 	healthECGViews = [5]HealthECGView{
 		NewHealthECGFine(),
@@ -40,8 +41,8 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	screen.Fill(color.NRGBA{0x10, 0x10, 0x10, 0xff})
-	for i := 0; i < 5; i++ {
+	screen.Fill(backgroundColor)
+	for i := 0; i < len(healthECGViews); i++ {
 		DrawECGView(screen, healthECGViews[i], initialXOffset, initialYOffset+distanceBetweenViews*i)
 	}
 }
