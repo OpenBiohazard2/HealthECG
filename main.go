@@ -16,12 +16,13 @@ const (
 	initialXOffset       = 50
 	initialYOffset       = 50
 	distanceBetweenViews = 75
+	minimapOffset        = 150
 )
 
 var (
 	backgroundColor = color.NRGBA{0x10, 0x10, 0x10, 0xff}
-	ecgOffsetX     = 0
-	healthECGViews = [5]HealthECGView{
+	ecgOffsetX      = 0
+	healthECGViews  = [5]HealthECGView{
 		NewHealthECGFine(),
 		NewHealthECGYellowCaution(),
 		NewHealthECGOrangeCaution(),
@@ -44,6 +45,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(backgroundColor)
 	for i := 0; i < len(healthECGViews); i++ {
 		DrawECGView(screen, healthECGViews[i], initialXOffset, initialYOffset+distanceBetweenViews*i)
+		DrawMinimap(screen, healthECGViews[i], initialXOffset, initialYOffset+distanceBetweenViews*i)
 	}
 }
 
@@ -82,6 +84,35 @@ func DrawECGView(screen *ebiten.Image, ecgView HealthECGView, xOffset int, yOffs
 		finalColor := color.RGBA{uint8(red), uint8(green), uint8(blue), 255}
 		ebitenutil.DrawLine(screen, float64(destX), float64(destY), float64(destX+width), float64(destY+height), finalColor)
 	}
+}
+
+func DrawMinimap(screen *ebiten.Image, ecgView HealthECGView, xOffset int, yOffset int) {
+	for startX := 0; startX < len(ecgView.Lines); startX++ {
+		// Draw a vertical line for the current line
+		destX := startX + xOffset + minimapOffset
+		destY := ecgView.Lines[startX][0] + yOffset
+		width := 1
+		height := ecgView.Lines[startX][1] + 1
+
+		lineColor := ecgView.Color
+		finalColor := color.RGBA{uint8(lineColor[0]), uint8(lineColor[1]), uint8(lineColor[2]), 255}
+		ebitenutil.DrawLine(screen, float64(destX), float64(destY), float64(destX+width), float64(destY+height), finalColor)
+	}
+
+	// Draw rectangular region over rendered area
+	regionColor := color.RGBA{255, 255, 255, 255}
+	regionUpperX := ecgOffsetX + xOffset + minimapOffset
+	regionLowerY := yOffset
+	regionLowerX := regionUpperX - 32
+	if regionLowerX < 0 {
+		regionLowerX = 0
+	}
+	regionUpperY := regionLowerY + 40
+
+	ebitenutil.DrawLine(screen, float64(regionLowerX), float64(regionLowerY), float64(regionLowerX), float64(regionUpperY), regionColor)
+	ebitenutil.DrawLine(screen, float64(regionUpperX), float64(regionLowerY), float64(regionUpperX), float64(regionUpperY), regionColor)
+	ebitenutil.DrawLine(screen, float64(regionLowerX), float64(regionLowerY), float64(regionUpperX), float64(regionLowerY), regionColor)
+	ebitenutil.DrawLine(screen, float64(regionLowerX), float64(regionUpperY), float64(regionUpperX), float64(regionUpperY), regionColor)
 }
 
 func main() {
