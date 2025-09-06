@@ -6,7 +6,7 @@ import (
 	"log"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
 const (
@@ -45,12 +45,34 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(backgroundColor)
 	for i := 0; i < len(healthECGViews); i++ {
 		DrawECGView(screen, healthECGViews[i], initialXOffset, initialYOffset+distanceBetweenViews*i)
-		DrawMinimap(screen, healthECGViews[i], initialXOffset, initialYOffset+distanceBetweenViews*i)
+		DrawECGOverview(screen, healthECGViews[i], initialXOffset, initialYOffset+distanceBetweenViews*i)
 	}
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return screenWidth, screenHeight
+}
+
+// calculateGradientColor calculates the color for a line based on its position and gradient
+func calculateGradientColor(baseColor [3]int, gradient [3]int, columnNum int) color.RGBA {
+	red := baseColor[0] - (gradient[0] * columnNum)
+	if red < 0 {
+		red = 0
+	}
+	green := baseColor[1] - (gradient[1] * columnNum)
+	if green < 0 {
+		green = 0
+	}
+	blue := baseColor[2] - (gradient[2] * columnNum)
+	if blue < 0 {
+		blue = 0
+	}
+	return color.RGBA{uint8(red), uint8(green), uint8(blue), 255}
+}
+
+// drawVerticalLine draws a single vertical line on the screen
+func drawVerticalLine(screen *ebiten.Image, x, y, width, height int, lineColor color.RGBA) {
+	vector.StrokeLine(screen, float32(x), float32(y), float32(x+width), float32(y+height), 1, lineColor, false)
 }
 
 func DrawECGView(screen *ebiten.Image, ecgView HealthECGView, xOffset int, yOffset int) {
@@ -59,47 +81,19 @@ func DrawECGView(screen *ebiten.Image, ecgView HealthECGView, xOffset int, yOffs
 		if startX < 0 || startX >= len(ecgView.Lines) {
 			continue
 		}
-		// Draw a vertical line for the current line
+
 		destX := startX + xOffset
 		destY := ecgView.Lines[startX][0] + yOffset
 		width := 1
 		height := ecgView.Lines[startX][1] + 1
 
-		// Lines to the left will have a darker color
-		// If the color component is negative, set to 0 so that it will render correctly
-		lineColor := ecgView.Color
-		gradientColor := ecgView.Gradient
-		red := lineColor[0] - (gradientColor[0] * columnNum)
-		if red < 0 {
-			red = 0
-		}
-		green := lineColor[1] - (gradientColor[1] * columnNum)
-		if green < 0 {
-			green = 0
-		}
-		blue := lineColor[2] - (gradientColor[2] * columnNum)
-		if blue < 0 {
-			blue = 0
-		}
-		finalColor := color.RGBA{uint8(red), uint8(green), uint8(blue), 255}
-		ebitenutil.DrawLine(screen, float64(destX), float64(destY), float64(destX+width), float64(destY+height), finalColor)
+		lineColor := calculateGradientColor(ecgView.Color, ecgView.Gradient, columnNum)
+		drawVerticalLine(screen, destX, destY, width, height, lineColor)
 	}
 }
 
-func DrawMinimap(screen *ebiten.Image, ecgView HealthECGView, xOffset int, yOffset int) {
-	for startX := 0; startX < len(ecgView.Lines); startX++ {
-		// Draw a vertical line for the current line
-		destX := startX + xOffset + minimapOffset
-		destY := ecgView.Lines[startX][0] + yOffset
-		width := 1
-		height := ecgView.Lines[startX][1] + 1
-
-		lineColor := ecgView.Color
-		finalColor := color.RGBA{uint8(lineColor[0]), uint8(lineColor[1]), uint8(lineColor[2]), 255}
-		ebitenutil.DrawLine(screen, float64(destX), float64(destY), float64(destX+width), float64(destY+height), finalColor)
-	}
-
-	// Draw rectangular region over rendered area
+// drawViewportIndicator draws the rectangular region overlay showing the current visible area
+func drawViewportIndicator(screen *ebiten.Image, xOffset, yOffset int) {
 	regionColor := color.RGBA{255, 255, 255, 255}
 	regionUpperX := ecgOffsetX + xOffset + minimapOffset
 	regionLowerY := yOffset
@@ -109,10 +103,28 @@ func DrawMinimap(screen *ebiten.Image, ecgView HealthECGView, xOffset int, yOffs
 	}
 	regionUpperY := regionLowerY + 40
 
-	ebitenutil.DrawLine(screen, float64(regionLowerX), float64(regionLowerY), float64(regionLowerX), float64(regionUpperY), regionColor)
-	ebitenutil.DrawLine(screen, float64(regionUpperX), float64(regionLowerY), float64(regionUpperX), float64(regionUpperY), regionColor)
-	ebitenutil.DrawLine(screen, float64(regionLowerX), float64(regionLowerY), float64(regionUpperX), float64(regionLowerY), regionColor)
-	ebitenutil.DrawLine(screen, float64(regionLowerX), float64(regionUpperY), float64(regionUpperX), float64(regionUpperY), regionColor)
+	// Draw the four sides of the rectangle
+	vector.StrokeLine(screen, float32(regionLowerX), float32(regionLowerY), float32(regionLowerX), float32(regionUpperY), 1, regionColor, false)
+	vector.StrokeLine(screen, float32(regionUpperX), float32(regionLowerY), float32(regionUpperX), float32(regionUpperY), 1, regionColor, false)
+	vector.StrokeLine(screen, float32(regionLowerX), float32(regionLowerY), float32(regionUpperX), float32(regionLowerY), 1, regionColor, false)
+	vector.StrokeLine(screen, float32(regionLowerX), float32(regionUpperY), float32(regionUpperX), float32(regionUpperY), 1, regionColor, false)
+}
+
+func DrawECGOverview(screen *ebiten.Image, ecgView HealthECGView, xOffset int, yOffset int) {
+	// Draw all ECG lines in the overview
+	for startX := 0; startX < len(ecgView.Lines); startX++ {
+		destX := startX + xOffset + minimapOffset
+		destY := ecgView.Lines[startX][0] + yOffset
+		width := 1
+		height := ecgView.Lines[startX][1] + 1
+
+		lineColor := ecgView.Color
+		finalColor := color.RGBA{uint8(lineColor[0]), uint8(lineColor[1]), uint8(lineColor[2]), 255}
+		drawVerticalLine(screen, destX, destY, width, height, finalColor)
+	}
+
+	// Draw the viewport indicator
+	drawViewportIndicator(screen, xOffset, yOffset)
 }
 
 func main() {
